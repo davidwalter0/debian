@@ -1,0 +1,65 @@
+#!/bin/bash
+export DIR=$(dirname $(readlink -f ${0}))
+
+if [[ ! -e ${DIR}/environment ]]; then
+    echo "Configuration file [environment] is missing."
+    exit 1
+fi
+
+. ${DIR}/environment
+
+for ((i=0, ip=0; i < ${#DEBIAN_RELEASES[*]}; i++, ip++ )); do
+    # printf "i %d j %d\n" ${i} ${j}
+    # echo ${LoadBalancerIPList[@]}
+    export RELEASE=${DEBIAN_RELEASES[${i}]}
+    export DEBIAN_RELEASE=${DEBIAN_RELEASES[${i}]}
+    export APPL_USER=${RUN_USER}
+    export DEBIAN_VERSION=${DEBIAN_RELEASE};
+    export DEBIAN_IMAGE=debian:${DEBIAN_RELEASE}-slim;
+    for (( appl=0; appl < ${#APPL_DIRS[@]}; appl++, ip++ )); do
+        export APPL=${APPL_DIRS[${appl}]}
+        case ${APPL} in
+            systemd)
+                export IMAGE=systemd:${DEBIAN_RELEASE};
+                export BASE_IMAGE=${DEBIAN_IMAGE};
+                ;;
+            ssh)
+                export RUN_USER=jump;
+                export IMAGE=systemd-${APPL}:${DEBIAN_RELEASE};
+                export BASE_IMAGE=systemd:${DEBIAN_RELEASE};
+                ;;
+            golang)
+                export RUN_USER=go;
+                export IMAGE=systemd-${APPL}:${DEBIAN_RELEASE};
+                export BASE_IMAGE=systemd-ssh:${DEBIAN_RELEASE};
+                ;;
+            postgresql)
+                export RUN_USER=postgres;
+                export IMAGE=systemd-${APPL}:${DEBIAN_RELEASE};
+                export BASE_IMAGE=systemd-ssh:${DEBIAN_RELEASE};
+                ;;
+            mosquitto)
+                export RUN_USER=mosquitto;
+                export IMAGE=systemd-${APPL}:${DEBIAN_RELEASE};
+                export BASE_IMAGE=systemd-ssh:${DEBIAN_RELEASE};
+                ;;
+        esac                
+        export LoadBalancerIP=${LoadBalancerIPList[${ip}]};
+        echo make -C ${APPL} yaml appl;
+        cat <<EOF
+export APPL=${APPL}
+export DOCKER_USER=${DOCKER_USER}
+export RUN_USER=${RUN_USER}
+export RUN_UID=${RUN_UID}
+export CORE_USER=${CORE_USER}
+export CORE_UID=${CORE_UID}
+export APPL_USER=${APPL_USER}
+export BASE_IMAGE=${BASE_IMAGE}
+export IMAGE=${IMAGE}
+export DEBIAN_RELEASE=${DEBIAN_RELEASE}
+export DEBIAN_VERSION=${DEBIAN_VERSION}
+export DEBIAN_IMAGE=${DEBIAN_IMAGE}
+EOF
+        make -C ${APPL} clean image;
+    done
+done

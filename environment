@@ -1,0 +1,90 @@
+#!/bin/bash
+export DIR=$(dirname $(readlink -f ${0}))
+
+function check_variables
+{
+    if [[ ! ${DOCKER_USER:-} ]] || [[ ! ${SSL_DOMAIN_NAME:-} ]]; then
+        return 1
+    fi
+    return 0
+}
+
+function usage 
+{
+    cat > /dev/fd/2 <<EOF
+
+Private configuration options should be set in the file
+[./environment] 
+
+You can add DOCKER_USER and SSL_DOMAIN_NAME to .config in the current
+directory. .config is in .gitignore
+
+DOCKER_USER is used for container pushes and must be set
+
+SSL_DOMAIN_NAME must be set for using letsencrypt certs and a valid CA
+and cert are required for mosquitto tests and website use when using
+chrome with it's default certificate validations
+
+Configure ./environment as needed updating the IP ranges
+and export DNS_NAMES, DOCKER_USER
+
+EOF
+    exit 1
+}
+
+if [[ ! -e "${DIR}/environment" ]] ; then
+    echo "${DIR}/environment not found"
+    usage
+fi
+
+if [[ ! -e "${DIR}/.config" ]] ; then
+    echo "${DIR}/.config not found"
+    usage
+fi
+
+. ${DIR}/.config
+
+if ! check_variables ; then
+    usage
+fi
+
+# standard configuration options
+export PUBLIC_KEY_FILE=${HOME}/.ssh/id_ed25519.pub
+export PUBLIC_KEY_FILE_NAME=id_ed25519.pub
+export PRIVATE_KEY_FILE=${HOME}/.ssh/id_ed25519
+export PRIVATE_KEY_FILE_NAME=id_ed25519
+
+########################################################################
+# Certs
+########################################################################
+export CaFile=/etc/letsencrypt/live/${CERT_DNS_NAME}/chain.pem
+export KeyFile=/etc/letsencrypt/live/${CERT_DNS_NAME}/privkey.pem
+export CertFile=/etc/letsencrypt/live/${CERT_DNS_NAME}/cert.pem
+export MosquittoConfiguration=mosquitto.conf
+
+# Run time user
+export CORE_USER=core
+export CORE_UID=1000
+export RUN_USER=core
+export RUN_UID=1001
+
+declare -a DEBIAN_RELEASES=(testing stretch jessie)
+declare -a APPL_DIRS=(systemd ssh golang postgresql mosquitto)
+
+declare -a LoadBalancerIPList=$(echo 192.168.0.2{00..47})
+declare -a BASE=(debian systemd ssh)
+
+# extract tag from latest commit, use tag for version
+export gittag=$(git tag -l --contains $(git log --pretty="format:%h"  -n1))
+export TAG=$(if git diff --quiet --ignore-submodules HEAD && [[ -n "$(gittag)" ]]; then echo $(gittag); else echo "canary"; fi)
+
+
+mkdir -p certs
+export CERT_DIR=certs
+export APP_COUNTRIES=US
+export APP_HOST=${DNS_NAMES};
+export APP_PORT=8883 ;
+export APP_ORGANIZATIONS=${APP_HOST} ;
+export APP_CERT=${CERT_DIR}/server.pem ;
+export APP_KEY=${CERT_DIR}/server.key ; 
+export DNS_NAMES=$(echo ${APP_HOST} ${LoadBalancerIPList} | tr ' ' ',')

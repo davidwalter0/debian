@@ -1,0 +1,112 @@
+# Copyright 2018 David Walter.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+define state
+
+Env Variable Name Value
+----------------- ---------------------------
+APPL              $(APPL)
+DOCKER_USER       $(DOCKER_USER)
+BUILD_USER        $(BUILD_USER)
+IMAGE             $(IMAGE)
+PUBLIC_KEY_FILE   $(PUBLIC_KEY_FILE)
+TAG               $(TAG)
+DEBIAN_IMAGE      ${DEBIAN_IMAGE}
+DEBIAN_VERSION    ${DEBIAN_VERSION}
+LoadBalancerIP    ${LOAD_BALANCER_IP}
+----------------- ---------------------------
+
+This project uses a golang template processing utility to update the
+configuration and depends on environment variables IMAGE, TAG,
+DOCKER_USER
+
+Environment variables are referenced as camel case in template double
+curly braces like
+
+Name           	 Go Template Variable
+------------   	 --------------------
+APPL           	 {{.Appl}}
+DOCKER_USER    	 {{.DockerUser}}
+BUILD_USER   	 {{.BuildUser}}
+IMAGE          	 {{.Image}}
+PUBLIC_KEY_FILE  {{.PublicKeyFile}}
+TAG            	 {{.Tag}}
+DEBIAN_IMAGE     {{.DebianImage}}
+DEBIAN_VERSION   {{.DebianVersion}}
+LoadBalancerIP   {{.LoadBalancerIP}
+
+----------------- ---------------------------
+
+The repo uses template util github.com/davidwalter0/applytmpl
+
+endef
+
+define buildtext
+
+DEBIAN_VERSION and BUILD_USER  environment variable should be set
+in the Makefile or with export BUILD_USER. The template
+systemd/daemonset.yaml.tmpl systemd/deploy.yaml.tmpl create secret
+using an authorized_keys file named by the PUBLIC_KEY_FILE
+environment variable
+
+example template use:
+
+  authorized_keys: '{{ file2string .KeyFile  | base64Encode }}'
+
+example environment variable setup:
+
+export BUILD_USER=build
+export PUBLIC_KEY_FILE=${HOME}/.ssh/id_rsa.pub
+export LoadBalancerIP=192.168.0.222 # for remote connection services
+endef
+
+ifeq ($(BUILD_USER),) 
+$(warning $(state))
+
+$(warning $(buildtext))
+
+$(error environment variable BUILD_USER is not set)
+endif
+
+ifeq ($(DOCKER_USER),)
+$(warning $(state))
+
+$(error environment variable DOCKER_USER hub.docker.com uid not set.)
+endif
+
+ifeq ($(PUBLIC_KEY_FILE),)
+$(warning $(state))
+$(error environment variable PUBLIC_KEY_FILE not set)
+endif
+
+define info
+
+echo "Env Variable Name Value                      "
+echo "----------------- ---------------------------"
+echo "APPL              $(APPL)                    "
+echo "DOCKER_USER       $(DOCKER_USER)             "
+echo "BUILD_USER        $(BUILD_USER)              "
+echo "IMAGE             $(IMAGE)                   "
+echo "PUBLIC_KEY_FILE   $(PUBLIC_KEY_FILE)         "
+echo "TAG               $(TAG)                     "
+echo "DEBIAN_IMAGE      ${DEBIAN_IMAGE}            "
+echo "DEBIAN_VERSION    ${DEBIAN_VERSION}          "
+echo "LoadBalancerIP    ${LOAD_BALANCER_IP}        "
+echo "----------------- ---------------------------"
+
+endef
+
+# Local variables:
+# mode: makefile
+# end:

@@ -1,0 +1,69 @@
+#!/bin/bash
+# Copyright 2018 David Walter.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+function newuser {
+    user=$1
+    uid=$2
+    addgroup --gid ${uid} ${user} ;
+    echo Y|adduser --shell /bin/bash --disabled-password --home /home/${user} --uid ${uid} --gid ${uid} ${user} ;
+    echo "${user} ALL=NOPASSWD:ALL" >> /etc/sudoers;
+    mkdir -p /home/${user}/ssh /home/${user}/.ssh
+    touch /home/${user}/.ssh/authorized_keys;
+    touch /home/${user}/.hushlogin;
+    git config --global http.sslVerify false;
+    sudo -u ${user} git config --global http.sslVerify false;
+    chown ${user} -R /home/${user} /home/${user}/.ssh;
+    mkdir -p /home/${user}/.ssh
+    cp /home/{{ .CoreUser }}/ssh/* /home/${user}/.ssh/
+    chown -R ${user}:${user} /home/${user}; 
+    chmod 600 /home/${user}/.ssh/*
+    chmod 644 /home/${user}/.ssh/authorized_keys  /home/${user}/.ssh/*.pub
+    chown -R ${user}:${user} /home/${user}/.ssh; 
+    chmod 700 /home/${user}/.ssh;
+}
+
+
+mkdir -p /etc/ssh /var/run/sshd ;
+sed -i "s/#PasswordAuthentication yes/PasswordAuthentication no/" /etc/ssh/sshd_config ;
+echo -e "y\n" | ssh-keygen -t rsa -f /etc/ssh/ssh_host_rsa_key -N "";
+echo -e "y\n" | ssh-keygen -t dsa -f /etc/ssh/ssh_host_dsa_key -N "";
+echo -e "y\n" | ssh-keygen -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key -N "";
+echo -e "y\n" | ssh-keygen -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -N ""; 
+
+newuser {{.RunUser}}   {{.RUN_UID}}
+newuser {{.CoreUser}}  {{.CORE_UID}}
+
+mkdir -p  /root/.ssh
+cp /home/{{ .CoreUser }}/ssh/* /root/.ssh/
+chmod 600 /root/.ssh/*
+chmod 644 /root/.ssh/authorized_keys  /root/.ssh/*.pub
+chmod 700 /root/.ssh;
+chown -R root:root /root/.ssh/
+
+rm -f /var/run/nologin /run/nologin;
+echo Config options for application
+echo ln -sf /kubernetes/config/mosquitto.conf /etc/mosquitto/mosquitto.conf;
+ln -sf /kubernetes/config/mosquitto.conf /etc/mosquitto/mosquitto.conf;
+
+systemctl set-default multi-user.target; 
+systemctl default; 
+systemctl isolate default.target
+
+systemctl enable mosquitto
+
+systemctl enable systemd-user-sessions.service
+systemctl start systemd-user-sessions.service
+
+exec /lib/systemd/systemd 

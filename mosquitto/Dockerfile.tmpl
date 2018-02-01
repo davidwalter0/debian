@@ -1,0 +1,55 @@
+# Copyright 2018 David Walter.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# docker build --no-cache --tag=ubuntu-systemd .&
+
+# on ubuntu 17.04 default install with ext4 file system, aufs failed
+# with kernel 4.13.0-12-generic, had to modify /etc/docker/daemon.json
+# to use overlay2
+# {
+#   "storage-driver": "overlay2"
+# }
+# ------------------------------------------------------------------------
+# container_linux.go:247: starting container process caused
+# "process_linux.go:359: container init caused \"rootfs_linux.go:54:
+# mounting \\\"cgroup\\\" to rootfs \\\"/var/lib/docker/auf
+# ------------------------------------------------------------------------
+
+FROM {{.DockerUser}}/{{.BaseImage}}
+
+ENV DEBIAN_FRONTEND noninteractive
+ENV init /lib/systemd/systemd
+ENV container docker
+ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LC_ALL C
+RUN echo 'APT::Install-Recommends "0"; \n\
+    APT::Get::Assume-Yes "true"; \n\
+    APT::Install-Suggests "0";' > /etc/apt/apt.conf.d/01buildconfig ; \
+    mkdir -p  /etc/apt/sources.d/ /usr/share/man/man1/ /usr/share/man/man7; \
+    apt-get -qq -y update; \
+    apt-get -qq -y install --reinstall mosquitto; \
+    apt-get -qq -y clean ; apt-get -qq -y autoclean; apt-get -qq -y autoremove ;
+
+COPY entrypoint.sh /usr/bin/entrypoint.sh
+RUN  chmod +x /usr/bin/entrypoint.sh;
+
+VOLUME [ "/sys/fs/cgroup" ]
+CMD ["/usr/bin/entrypoint.sh"]
+# ENTRYPOINT ["/usr/bin/entrypoint.sh"]
+
+# local variables:
+# mode: conf
+# end:
